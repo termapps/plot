@@ -1,32 +1,20 @@
-env:
-  NAME: plot
 name: CI
 on:
   push:
     branches: [master]
-    tags: [v*]
   pull_request:
     branches: [master]
     types: [opened, reopened, synchronize]
 jobs:
-  ready-release:
-    name: Ready release
+  ci:
+    name: CI
+    needs: [test, lint]
     runs-on: ubuntu-latest
     steps:
-      - name: Create Release
-        id: create-release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
       - name: Done
         run: exit 0
   test:
     name: Tests
-    needs: [ready-release]
     strategy:
       fail-fast: false
       matrix:
@@ -62,25 +50,6 @@ jobs:
         with:
           command: test
           args: --target ${{ matrix.target }}
-      - name: Build
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions-rs/cargo@v1
-        with:
-            command: build
-            args: --target ${{ matrix.target }} --release
-      - name: Read version
-        id: tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
-      - name: Ready artifacts
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          BUILD_NAME: ${{ env.NAME }}-${{ steps.tag.outputs.VERSION }}-${{ matrix.target }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          mkdir $BUILD_NAME
-          cp target/$TARGET/release/$NAME LICENSE *.md $NAME.1 $BUILD_NAME
-          zip $BUILD_NAME.zip -r $BUILD_NAME
   lint:
     name: Linting (fmt + clippy)
     runs-on: ubuntu-latest
@@ -104,18 +73,3 @@ jobs:
         with:
           command: fmt
           args: -- --check
-  # homebrew:
-  #   name: Homebrew
-  #   needs: [release]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout tap
-  #       uses: actions/checkout@v2
-  #       with:
-  #         repository: 'termapps/homebrew-tap'
-  #     - name: Read version
-  #       id: tag
-  #       if: startsWith(github.ref, 'refs/tags/v')
-  #       run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
-  #     - name: Update forumla
-  #       run: bash update.sh
