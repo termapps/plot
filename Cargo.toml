@@ -1,0 +1,26 @@
+[package]
+name = "plot"
+version = "0.0.1"
+authors = ["Pavan Kumar Sunkara <pavan.sss1991@gmail.com>"]
+edition = "2018"
+description = "Command Line Utility for Stylish Interactive Charts"
+categories = ["command-line-utilities", "development-tools"]
+repository = "https://github.com/termapps/plot"
+readme = "README.md"
+license = "MIT"
+include = ["src/**/*.rs", "Cargo.toml", "LICENSE", "*.md"]
+
+[badges]
+travis-ci = { repository = "termapps/enquirer" }
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+console = "0.13.0"
+structopt = "0.3.7"
+
+[[bin]]
+name = "plot"
+path = "src/main.rs"
+
+[profile.release]
+lto = "thin"

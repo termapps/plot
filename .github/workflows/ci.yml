@@ -1,0 +1,121 @@
+env:
+  NAME: plot
+name: CI
+on:
+  push:
+    branches: [master]
+    tags: [v*]
+  pull_request:
+    branches: [master]
+    types: [opened, reopened, synchronize]
+jobs:
+  ready-release:
+    name: Ready release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        id: create-release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+      - name: Done
+        run: exit 0
+  test:
+    name: Tests
+    needs: [ready-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: i686-unknown-linux-gnu
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          # - i686-pc-windows-gnu
+          # - x86_64-pc-windows-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+      - name: Install linker
+        if: matrix.target == 'i686-unknown-linux-gnu'
+        run: sudo apt-get install gcc-5-multilib lib32gcc-5-dev
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --target ${{ matrix.target }}
+      - name: Build
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions-rs/cargo@v1
+        with:
+            command: build
+            args: --target ${{ matrix.target }} --release
+      - name: Read version
+        id: tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+      - name: Ready artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          BUILD_NAME: ${{ env.NAME }}-${{ steps.tag.outputs.VERSION }}-${{ matrix.target }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          mkdir $BUILD_NAME
+          cp target/$TARGET/release/$NAME LICENSE *.md $NAME.1 $BUILD_NAME
+          zip $BUILD_NAME.zip -r $BUILD_NAME
+  lint:
+    name: Linting (fmt + clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Clippy check
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all --all-targets --all-features -- -D warnings
+      - name: Format check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+  # homebrew:
+  #   name: Homebrew
+  #   needs: [release]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout tap
+  #       uses: actions/checkout@v2
+  #       with:
+  #         repository: 'termapps/homebrew-tap'
+  #     - name: Read version
+  #       id: tag
+  #       if: startsWith(github.ref, 'refs/tags/v')
+  #       run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+  #     - name: Update forumla
+  #       run: bash update.sh
